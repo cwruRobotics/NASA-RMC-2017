@@ -1,6 +1,7 @@
 #include <Sabertooth.h>
 #include <RoboClaw.h>
 #include <math.h>
+#include "HX711.h"
 
 #define COMMAND_READ_SENSORS (0x01)
 #define COMMAND_SET_OUTPUTS (0x02)
@@ -31,7 +32,8 @@ enum SensorHardware {
   SH_RC_ENC,
   SH_RC_CUR,
   SH_PIN_LIMIT,
-  SH_PIN_POT
+  SH_PIN_POT,
+  SH_LD_CUR
 };
 
 typedef struct SensorInfo {
@@ -41,6 +43,9 @@ typedef struct SensorInfo {
   uint8_t whichPin; // When hardware = SH_PIN_*
   float responsiveness;
   uint16_t scale; // 1 unless needed
+  uint8_t whichCell; //Only used when hardware = SH_LD_CUR
+  uint8_t clk;
+  float loadCellScale;
 } SensorInfo;
 
 enum MotorHardware {
@@ -81,6 +86,7 @@ uint8_t sensor_lastLimitVals[256] = {}; // All initialized to 0
 int16_t sensor_storedVals[256] = {}; // All initialized to 0
 float motor_integrals[256] = {}; //All initialized to 0
 int16_t motor_lastUpdateTime[256] = {}; //All initialized to 0
+HX711 sensor_loadcells[4] = {};
 bool stopped = true;
 
 RoboClaw roboclaw(&Serial1,10000);
@@ -200,6 +206,42 @@ void setup() {
   sensor_infos[26].hardware = SH_PIN_LIMIT;
   sensor_infos[26].whichPin = 39;
   sensor_infos[26].scale = 1;
+
+  //FL load cell A
+  sensor_infos[28].hardware = SH_LD_CUR;
+  sensor_infos[28].whichPin = 26;
+  sensor_infos[28].clk = 27;
+  sensor_infos[28].whichCell = 0;
+  sensor_loadcells[sensor_infos[28].whichCell] = HX711(sensor_infos[28].whichPin, sensor_infos[28].clk);
+  sensor_loadcells[sensor_infos[28].whichCell].tare();
+  sensor_loadcells[sensor_infos[28].whichCell].set_scale();
+
+  //FR load cell B
+  sensor_infos[29].hardware = SH_LD_CUR;
+  sensor_infos[29].whichPin = 28;
+  sensor_infos[29].clk = 29;
+  sensor_infos[29].whichCell = 1;
+  sensor_loadcells[sensor_infos[29].whichCell] = HX711(sensor_infos[29].whichPin, sensor_infos[29].clk);
+  sensor_loadcells[sensor_infos[29].whichCell].tare();
+  sensor_loadcells[sensor_infos[29].whichCell].set_scale();
+  
+  //BL load cell C
+  sensor_infos[30].hardware = SH_LD_CUR;
+  sensor_infos[30].whichPin = 30;
+  sensor_infos[30].clk = 31;
+  sensor_infos[30].whichCell = 2;
+  sensor_loadcells[sensor_infos[30].whichCell] = HX711(sensor_infos[30].whichPin, sensor_infos[30].clk);
+  sensor_loadcells[sensor_infos[30].whichCell].tare();
+  sensor_loadcells[sensor_infos[30].whichCell].set_scale();
+  
+  //BR load cell D
+  sensor_infos[31].hardware = SH_LD_CUR;
+  sensor_infos[31].whichPin = 32;
+  sensor_infos[31].clk = 33;
+  sensor_infos[31].whichCell = 3;
+  sensor_loadcells[sensor_infos[31].whichCell] = HX711(sensor_infos[31].whichPin, sensor_infos[31].clk);
+  sensor_loadcells[sensor_infos[31].whichCell].tare();
+  sensor_loadcells[sensor_infos[31].whichCell].set_scale();
 
   sensor_infos[38].hardware = SH_RC_CUR;
   sensor_infos[38].addr = ADDRESS_RC_3;
@@ -376,6 +418,7 @@ void setup() {
   configure_sensors();
   configure_motors();
   save_roboclaw();
+  tare_loadcells();
 }
 
 void setup_comms() {
@@ -573,6 +616,13 @@ FAULT_T configure_motors() {
   return NO_FAULT;
 }
 
+void tare_loadcells(){
+  for(int i = 0; i < 4; i++){
+    sensor_loadcells[i].tare();
+    sensor_loadcells[i].set_scale(5033);
+  }
+}
+
 void loop() {
   while (true) {
     FAULT_T retfault;
@@ -700,6 +750,9 @@ FAULT_T getSensor(uint16_t ID, int16_t *val) {
     sensor_storedVals[ID] = (sensor_storedVals[ID] * (1 - sensor_info.responsiveness)) + readVal * sensor_info.responsiveness;
     *val = sensor_storedVals[ID];
     break;
+  case SH_LD_CUR:
+    *val = sensor_loadcells[sensor_infos[ID].whichCell].get_units(10);
+    
   default:
     break;
   }
@@ -836,7 +889,14 @@ FAULT_T setActuator(uint16_t ID, int16_t val) {
 
 void hciWait() {
   do {
-    
+    Serial.print(sensor_loadcells[sensor_infos[28].whichCell].get_units(10));
+    Serial.print(" ");
+    Serial.print(sensor_loadcells[sensor_infos[29].whichCell].get_units(10));
+    Serial.print(" ");
+    Serial.print(sensor_loadcells[sensor_infos[30].whichCell].get_units(10));
+    Serial.print(" ");
+    Serial.print(sensor_loadcells[sensor_infos[31].whichCell].get_units(10));
+    Serial.println(" ");
     if(stopped){
       continue; 
     }
@@ -883,18 +943,6 @@ void hciWait() {
         bool success;
         if(motor_info.hardware == MH_ST_POS) {
           if(id == 9) {
-            Serial.print(id);
-            Serial.print(" ");
-            Serial.print(pos);
-            Serial.print(" ");
-            Serial.print(motor_setpoints[id]);
-            Serial.print(" ");
-            Serial.print(motor_info.kp * err);
-            Serial.print(" ");
-            Serial.print(motor_info.ki * motor_integrals[id]);
-            Serial.print(" ");
-            Serial.print(val);
-            Serial.println(" ");
             if(val > 0 && (digitalRead(37) == LOW || digitalRead(39) == LOW)) {
               //We hit a switch and are trying to move in the same direction, stop!
               sabretooth[motor_info.addr].motor(motor_info.whichMotor, 0);

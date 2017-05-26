@@ -758,9 +758,26 @@ public class ModuleMain {
                             .setTimestamp(unixTime)
                             .build();
                     channel.basicPublish("amq.topic","sensor.excavation.conveyor_current", null,msg.toByteArray());
+				} else if (sensorDataID >= 28 && sensorDataID <= 31){
+					 Messages.LoadUpdate msg = Messages.LoadUpdate.newBuilder()
+                            .setLoad((float)value)
+                            .setTimestamp(unixTime)
+                            .build();
+                    if (sensorDataID == 28){
+                        channel.basicPublish("amq.topic","sensor.deposition.load.front_left", null,msg.toByteArray());
+                    }
+                    else if (sensorDataID == 29){
+                        channel.basicPublish("amq.topic","sensor.deposition.load.front_right", null,msg.toByteArray());
+                    }
+                    else if (sensorDataID == 30){
+                        channel.basicPublish("amq.topic","sensor.deposition.load.back_left", null,msg.toByteArray());
+                    }
+                    else if (sensorDataID == 31){
+                        channel.basicPublish("amq.topic","sensor.deposition.load.back_right", null,msg.toByteArray());
+                    }
 				} else {
-					// TODO: do others
-				}
+
+                }
 				if (!hciThread.isAlive()) {
 				    break;
                 }
