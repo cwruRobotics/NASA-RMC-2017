@@ -14,6 +14,7 @@
 #include <QCloseEvent>
 #include "doubleedit.h"
 #include "drillslider.h"
+#include <QtCharts>
 
 /*
  * In this file, the state of the robot is queried by RPC.
@@ -248,6 +249,20 @@ MainWindow::MainWindow(QWidget *parent) :
                      this, &MainWindow::handleExcavationArmDrive);
     QObject::connect(ui->checkBox_Vibrate, &QCheckBox::stateChanged,
                      this, &MainWindow::handleVibrate);
+
+    depthChart = new QChart();
+    depthSeries = new QLineSeries(depthChart);
+    depthChart->legend()->hide();
+    depthChart->addSeries(depthSeries);
+    depthChart->setTitle("Depth over time");
+    xAxis = new QValueAxis();
+    yAxis = new QValueAxis();
+    xAxis->setRange(0, 10);
+    yAxis->setRange(0, 100);
+    depthChart->setAxisX(xAxis);
+    depthChart->setAxisY(yAxis);
+    ui->chartView->setChart(depthChart);
+    //ui->chartView->setRenderHint(QPainter::Antialiasing);
 }
 
 MainWindow::MainWindow(QString loginStr, QWidget *parent) :
@@ -1259,6 +1274,12 @@ void MainWindow::handleState(QString key, QByteArray data) {
     ui->ledIndicator_ExcavationTranslationRetractRight->setState(exc_ret_right);
     ui->speedometer_Excavation->setSpeed(translation_pos);
     ui->speedometer_Excavation->setPower(bc_current * (100.0F/20.0F));
+    *depthSeries << QPointF(depthSeriesIndex, translation_pos);
+    depthSeries->replace(depthSeries->points());
+    depthSeriesIndex++;
+    xAxis->setRange(0, depthSeriesIndex);
+    depthChart->update();
+    ui->chartView->repaint();
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *ev) {

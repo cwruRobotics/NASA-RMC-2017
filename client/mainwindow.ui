@@ -342,8 +342,8 @@
         <widget class="Speedometer" name="speedometer_Excavation" native="true">
          <property name="geometry">
           <rect>
-           <x>210</x>
-           <y>20</y>
+           <x>590</x>
+           <y>10</y>
            <width>311</width>
            <height>251</height>
           </rect>
@@ -525,6 +525,16 @@
            </widget>
           </item>
          </layout>
+        </widget>
+        <widget class="QtCharts::QChartView" name="chartView">
+         <property name="geometry">
+          <rect>
+           <x>10</x>
+           <y>10</y>
+           <width>561</width>
+           <height>251</height>
+          </rect>
+         </property>
         </widget>
        </widget>
        <widget class="QWidget" name="tab_DepositionControl">
@@ -3320,6 +3330,11 @@
    <extends>QWidget</extends>
    <header>ledindicator.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>QtCharts::QChartView</class>
+   <extends>QGraphicsView</extends>
+   <header>QtCharts/QChartView</header>
   </customwidget>
  </customwidgets>
  <resources/>
